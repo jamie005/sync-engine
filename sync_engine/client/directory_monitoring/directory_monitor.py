@@ -1,5 +1,5 @@
 import logging
-from multiprocessing import Queue
+from queue import Queue
 
 from watchdog.events import (FileClosedEvent, FileCreatedEvent, FileDeletedEvent,
                              FileMovedEvent, FileSystemEvent, FileSystemEventHandler)
