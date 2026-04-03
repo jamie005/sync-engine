@@ -11,6 +11,9 @@ dependencies = [
     "colorlog == 6.10.1",
 ]
 
+[tool.poetry.scripts]
+client = 'sync_engine.client.__main__:main'
+server = 'sync_engine.server.__main__:main'
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
