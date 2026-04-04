@@ -4,7 +4,13 @@ import os
 from queue import Empty, Queue
 from threading import Event, Thread
 
-from sync_engine.client.monitoring.events import SyncEngineFileSystemEvent
+from pydantic import BaseModel, Field
+
+from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
+
+
+class DirectoryCache(BaseModel):
+    entries: dict[str, str] = Field(default_factory=dict)
 
 
 class DirectorySyncManager:
@@ -18,7 +24,7 @@ class DirectorySyncManager:
         self._file_system_events = file_system_events
         self._stop_event = Event()
         self._worker_thread: Thread | None = None
-        self._directory_cache: dict[str, str] | None = None
+        self._directory_cache: DirectoryCache | None = None
 
     def start(self) -> bool:
         if self._worker_thread and self._worker_thread.is_alive():
@@ -26,7 +32,7 @@ class DirectorySyncManager:
             return False
 
         if not self._initialise_directory_cache():
-            msg = f"Failed to initialise directory cache. Directory not found or inaccessible: {self._target_directory}"
+            msg = f"Failed to initialise directory cache. Directory not found: {self._target_directory}"
             self._logger.error(msg)
             return False
 
@@ -54,7 +60,7 @@ class DirectorySyncManager:
             if file_hash is not None:
                 entries[relative_path] = file_hash
 
-        self._directory_cache = entries
+        self._directory_cache = DirectoryCache(entries=entries)
         return True
 
     def _consume_events(self) -> None:
@@ -69,7 +75,47 @@ class DirectorySyncManager:
                 self._logger.warning(msg)
                 continue
 
-            self._logger.debug(f"Received file system event: {event}")
+            self._apply_event(event)
+
+    def _apply_event(self, event: SyncEngineFileSystemEvent) -> None:
+        if event.is_directory or self._directory_cache is None:
+            return
+
+        match event.type:
+            case FileSystemEventType.CREATED | FileSystemEventType.MODIFIED:
+                self._handle_created_or_modified(event.path)
+            case FileSystemEventType.DELETED:
+                self._handle_deleted(event.path)
+            case FileSystemEventType.MOVED:
+                self._handle_moved(event.path, event.new_path)
+            case _:
+                self._logger.warning(f"Received unsupported file system event type: {event.type}")
+
+    def _handle_created_or_modified(self, file_path: str) -> None:
+        if self._directory_cache is None:
+            return
+
+        file_hash = self._file_sha256(file_path)
+        if file_hash is not None:
+            self._directory_cache.entries[file_path] = file_hash
+        elif file_path in self._directory_cache.entries:
+            self._directory_cache.entries.pop(file_path)
+
+    def _handle_deleted(self, file_path: str) -> None:
+        if self._directory_cache is None:
+            return
+
+        self._directory_cache.entries.pop(file_path)
+
+    def _handle_moved(self, old_path: str, new_path: str | None) -> None:
+        if self._directory_cache is None or not isinstance(new_path, str):
+            return
+
+        moved_file_hash = self._directory_cache.entries.pop(old_path)
+        if moved_file_hash is None:
+            return
+
+        self._directory_cache.entries[new_path] = moved_file_hash
 
     def _file_sha256(self, file_path: str) -> str | None:
         try:
