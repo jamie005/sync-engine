@@ -18,13 +18,15 @@ def main() -> None:
 
     client = SyncEngineClient(target_directory=args.source_directory)
     try:
-        client.start()
-    except KeyboardInterrupt:
-        logger.info("Keyboard interrupt received. Shutting down...")
+        started = client.start()
+        if started:
+            client.wait_for_stop()
+        else:
+            logger.error("Sync Engine Client failed to start.")
     except Exception as e:
-        logger.info(f"Shutting down. Exception occurred in Sync Engine Client: {e}")
+        logger.exception(f"Shutting down. Exception occurred in Sync Engine Client: {e}")
     finally:
-        logger.info("Sync Engine Client stopped.")
+        client.stop()
 
 
 if __name__ == "__main__":

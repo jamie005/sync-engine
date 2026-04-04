@@ -17,7 +17,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, file_events: Queue) -> None:
+    def __init__(self, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
         super().__init__()
         self._file_events = file_events
 
@@ -45,7 +45,6 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 
         log_message = self._get_valid_event_log_message(sync_engine_file_sys_event)
         self._logger.info(log_message)
-
         self._file_events.put(sync_engine_file_sys_event)
 
     @staticmethod
@@ -60,20 +59,33 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 class DirectoryMonitor:
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: str, file_events: Queue) -> None:
+    def __init__(self, target_directory: str, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
         self._observer = Observer()
-        self._target_directory = target_directory
+        self._target_directory: str = target_directory
         self._event_handler = _SyncEngineClientFileEventHandler(file_events=file_events)
+        self._started: bool = False
 
-    def start(self) -> None:
+    def start(self) -> bool:
+        if self._started:
+            self._logger.warning("DirectoryMonitor is already running.")
+            return False
         try:
             self._observer.schedule(self._event_handler, self._target_directory, recursive=False)
             self._observer.start()
-        except FileNotFoundError:
-            self._logger.error(f"Failed to start monitoring directory - directory not found: {self._target_directory}")
         except Exception as e:
-            self._logger.error(f"Error while monitoring directory: {e}")
+            self._logger.exception(f"Failed to start directory monitor: {e}")
+            return False
+
+        self._started = True
+        return True
 
     def stop(self) -> None:
-        self._observer.stop()
-        self._observer.join()
+        if not self._started:
+            return
+        try:
+            self._observer.stop()
+            self._observer.join()
+        except Exception as e:
+            self._logger.exception(f"Error while stopping directory monitor: {e}")
+        finally:
+            self._started = False

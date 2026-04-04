@@ -19,7 +19,7 @@ class DirectorySyncManager:
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: str, file_system_events: Queue) -> None:
+    def __init__(self, target_directory: str, file_system_events: Queue[SyncEngineFileSystemEvent]) -> None:
         self._target_directory = target_directory
         self._file_system_events = file_system_events
         self._stop_event = Event()
@@ -49,16 +49,13 @@ class DirectorySyncManager:
         entries: dict[str, str] = {}
 
         for item_name in os.listdir(self._target_directory):
-            relative_path = os.path.relpath(
-                os.path.join(self._target_directory, item_name),
-                self._target_directory,
-            )
-            if not os.path.isfile(relative_path):
+            abs_path = os.path.join(self._target_directory, item_name)
+            if not os.path.isfile(abs_path):
                 continue
 
-            file_hash = self._file_sha256(relative_path)
+            file_hash = self._file_sha256(abs_path)
             if file_hash is not None:
-                entries[relative_path] = file_hash
+                entries[abs_path] = file_hash
 
         self._directory_cache = DirectoryCache(entries=entries)
         return True
@@ -99,19 +96,19 @@ class DirectorySyncManager:
         if file_hash is not None:
             self._directory_cache.entries[file_path] = file_hash
         elif file_path in self._directory_cache.entries:
-            self._directory_cache.entries.pop(file_path)
+            self._directory_cache.entries.pop(file_path, None)
 
     def _handle_deleted(self, file_path: str) -> None:
         if self._directory_cache is None:
             return
 
-        self._directory_cache.entries.pop(file_path)
+        self._directory_cache.entries.pop(file_path, None)
 
     def _handle_moved(self, old_path: str, new_path: str | None) -> None:
         if self._directory_cache is None or not isinstance(new_path, str):
             return
 
-        moved_file_hash = self._directory_cache.entries.pop(old_path)
+        moved_file_hash = self._directory_cache.entries.pop(old_path, None)
         if moved_file_hash is None:
             return
 
@@ -131,7 +128,8 @@ class DirectorySyncManager:
             return None
 
     def stop(self) -> None:
-        self._stop_event.set()
+        if not self._worker_thread:
+            return
 
-        if self._worker_thread:
-            self._worker_thread.join(timeout=2)
+        self._stop_event.set()
+        self._worker_thread.join(timeout=2)
