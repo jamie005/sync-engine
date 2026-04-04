@@ -39,7 +39,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
     def on_any_event(self, event: FileSystemEvent) -> None:
         sync_engine_file_sys_event = WatchDogEventTransformer.transform(event)
 
-        if sync_engine_file_sys_event.type == FileSystemEventType.UNKNNOWN:
+        if sync_engine_file_sys_event.type == FileSystemEventType.UNKNOWN:
             self._logger.warning(f"Unknown file event detected: {event}")
             return
 

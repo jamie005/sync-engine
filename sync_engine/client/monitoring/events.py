@@ -3,7 +3,7 @@ from enum import Enum
 
 
 class FileSystemEventType(Enum):
-    UNKNNOWN = 0
+    UNKNOWN = 0
     CREATED = 1
     DELETED = 2
     MODIFIED = 3

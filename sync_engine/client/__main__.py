@@ -8,7 +8,7 @@ from sync_engine.common.logging_helpers import get_color_log_handler
 def main() -> None:
     # Set up logging
     logger = logging.getLogger(__package__)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(logging.DEBUG)
     logger.addHandler(get_color_log_handler())
 
     # Set up argument parsing

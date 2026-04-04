@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from queue import Empty, Queue
 from threading import Event, Thread
 
-from sync_engine.client.directory_monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
+from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
 
 
 @dataclass(frozen=True)

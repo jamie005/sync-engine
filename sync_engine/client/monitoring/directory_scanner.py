@@ -1,6 +1,6 @@
 import os
 from queue import Queue
-from sync_engine.client.directory_monitoring.events import SyncEngineFileSystemEvent, FileSystemEventType
+from sync_engine.client.monitoring.events import SyncEngineFileSystemEvent, FileSystemEventType
 
 
 class DirectoryScanner:

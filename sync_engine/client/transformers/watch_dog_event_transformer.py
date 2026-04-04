@@ -1,6 +1,6 @@
 from watchdog.events import FileClosedEvent, FileSystemEvent, FileCreatedEvent, FileDeletedEvent, FileMovedEvent
 
-from sync_engine.client.directory_monitoring.events import SyncEngineFileSystemEvent, FileSystemEventType
+from sync_engine.client.monitoring.events import SyncEngineFileSystemEvent, FileSystemEventType
 
 
 class WatchDogEventTransformer:
@@ -26,7 +26,7 @@ class WatchDogEventTransformer:
         elif isinstance(watchdog_event, FileMovedEvent):
             event_type = FileSystemEventType.MOVED
         else:
-            event_type = FileSystemEventType.UNKNNOWN
+            event_type = FileSystemEventType.UNKNOWN
 
         src_path = str(watchdog_event.src_path)
         dest_path = str(watchdog_event.dest_path)
