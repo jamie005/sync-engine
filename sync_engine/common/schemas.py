@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class CreateFileRequest(BaseModel):
     file_name: str
+    file_hash: str
     content: str = ""
 
 

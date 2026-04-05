@@ -3,6 +3,8 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request
 from pydantic import BaseModel, ValidationError
+
+from sync_engine.common.hashing import sha256_string
 from sync_engine.common.schemas import (
     CreateFileRequest,
     DeleteFileRequest,
@@ -51,6 +53,19 @@ def create_app(base_directory: Path) -> Flask:
             body = CreateFileRequest.model_validate(payload)
         except ValidationError as exc:
             return _validation_error_response(exc)
+
+        # Verify file content integrity via hash
+        computed_hash = sha256_string(body.content)
+        if computed_hash != body.file_hash:
+            return _json_response(
+                ErrorResponse(
+                    error="File content hash mismatch",
+                    details=[
+                        {"field": "file_hash", "expected": body.file_hash, "received": computed_hash}
+                    ],
+                ),
+                HTTPStatus.BAD_REQUEST,
+            )
 
         try:
             target = _resolve_safe_path(app.config["BASE_DIRECTORY"], body.file_name)

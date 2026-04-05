@@ -1,4 +1,3 @@
-import hashlib
 import logging
 import os
 from queue import Empty, Queue
@@ -7,6 +6,7 @@ from threading import Event, Thread
 from pydantic import BaseModel, Field
 
 from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
+from sync_engine.common.hashing import sha256_file
 
 
 class DirectoryCache(BaseModel):
@@ -53,7 +53,7 @@ class DirectorySyncManager:
             if not os.path.isfile(abs_path):
                 continue
 
-            file_hash = self._file_sha256(abs_path)
+            file_hash = sha256_file(abs_path)
             if file_hash is not None:
                 entries[abs_path] = file_hash
 
@@ -92,7 +92,7 @@ class DirectorySyncManager:
         if self._directory_cache is None:
             return
 
-        file_hash = self._file_sha256(file_path)
+        file_hash = sha256_file(file_path)
         if file_hash is not None:
             self._directory_cache.entries[file_path] = file_hash
         elif file_path in self._directory_cache.entries:
@@ -113,19 +113,6 @@ class DirectorySyncManager:
             return
 
         self._directory_cache.entries[new_path] = moved_file_hash
-
-    def _file_sha256(self, file_path: str) -> str | None:
-        try:
-            digest = hashlib.sha256()
-            with open(file_path, "rb") as file_stream:
-                for chunk in iter(lambda: file_stream.read(64 * 1024), b""):
-                    digest.update(chunk)
-            return digest.hexdigest()
-        except FileNotFoundError:
-            return None
-        except OSError as exc:
-            self._logger.warning(f"Unable to hash file for delta cache: {file_path}. Error: {exc}")
-            return None
 
     def stop(self) -> None:
         if not self._worker_thread:
