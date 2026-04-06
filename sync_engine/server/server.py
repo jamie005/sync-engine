@@ -75,8 +75,14 @@ def create_app(base_directory: Path) -> Flask:
         if target.exists():
             return _json_response(ErrorResponse(error="File already exists"), HTTPStatus.CONFLICT)
 
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(body.content, encoding="utf-8")
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(body.content, encoding="utf-8")
+        except OSError as exc:
+            return _json_response(
+                ErrorResponse(error=f"Failed to create file: {str(exc)}"),
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
 
         return _json_response(
             FileActionResponse(message="File created", file_name=body.file_name),
@@ -99,7 +105,14 @@ def create_app(base_directory: Path) -> Flask:
         if not target.exists() or not target.is_file():
             return _json_response(ErrorResponse(error="File not found"), HTTPStatus.NOT_FOUND)
 
-        target.unlink()
+        try:
+            target.unlink()
+        except OSError as exc:
+            return _json_response(
+                ErrorResponse(error=f"Failed to delete file: {str(exc)}"),
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+
         return _json_response(
             FileActionResponse(message="File deleted", file_name=body.file_name),
             HTTPStatus.OK,
@@ -129,8 +142,14 @@ def create_app(base_directory: Path) -> Flask:
                 ErrorResponse(error="Destination already exists"), HTTPStatus.CONFLICT
             )
 
-        destination.parent.mkdir(parents=True, exist_ok=True)
-        source.rename(destination)
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            source.rename(destination)
+        except OSError as exc:
+            return _json_response(
+                ErrorResponse(error=f"Failed to rename file: {str(exc)}"),
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
 
         return _json_response(
             RenameFileResponse(
