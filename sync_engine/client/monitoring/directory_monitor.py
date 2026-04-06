@@ -2,7 +2,7 @@ import logging
 from queue import Queue
 
 from watchdog.events import (
-    FileClosedEvent, 
+    FileClosedEvent,
     FileCreatedEvent,
     FileDeletedEvent,
     FileMovedEvent,
@@ -18,7 +18,7 @@ from sync_engine.client.transformers.watch_dog_event_transformer import WatchDog
 class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
     _VALID_EVENT_TYPES: tuple[type[FileSystemEvent], ...] = (
         FileCreatedEvent,
-        FileClosedEvent, 
+        FileClosedEvent,
         FileDeletedEvent,
         FileMovedEvent
     )
