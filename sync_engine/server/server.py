@@ -29,7 +29,7 @@ def _validation_error_response(exc: ValidationError):
 
 def _resolve_safe_path(base_directory: Path, relative_path: str) -> Path:
     if not relative_path:
-        raise ValueError("'path' must be a non-empty string")
+        raise ValueError("'file path' must be a non-empty string")
 
     candidate = (base_directory / relative_path).resolve()
     base_resolved = base_directory.resolve()
