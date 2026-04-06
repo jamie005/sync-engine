@@ -6,7 +6,9 @@ from threading import Event, Thread
 from pydantic import BaseModel, Field
 
 from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
+from sync_engine.client.synchronisation.api_client import HttpSyncApiClient, SyncApiClientError
 from sync_engine.common.hashing import sha256_file
+from sync_engine.common.schemas import CreateFileRequest, DeleteFileRequest, RenameFileRequest
 
 
 class DirectoryCache(BaseModel):
@@ -19,9 +21,12 @@ class DirectorySyncManager:
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: Path, file_system_events: Queue[SyncEngineFileSystemEvent]) -> None:
+    def __init__(self, target_directory: Path,
+                 file_system_events: Queue[SyncEngineFileSystemEvent],
+                 api_client: HttpSyncApiClient) -> None:
         self._target_directory = target_directory
         self._file_system_events = file_system_events
+        self._api_client = api_client
         self._stop_event = Event()
         self._worker_thread: Thread | None = None
         self._directory_cache: DirectoryCache | None = None
@@ -94,26 +99,53 @@ class DirectorySyncManager:
 
         absolute_path = file_path.resolve()
         file_hash = sha256_file(absolute_path)
-        if file_hash is not None:
-            self._directory_cache.entries[absolute_path] = file_hash
-        elif absolute_path in self._directory_cache.entries:
+
+        if file_hash is None:
             self._directory_cache.entries.pop(absolute_path, None)
+            self._logger.warning(f"Failed to compute hash for file: {absolute_path}. Skipping sync for this file.")
+            return
+
+        self._directory_cache.entries[absolute_path] = file_hash
+        request = CreateFileRequest(
+                file_name=absolute_path.name,
+                file_hash=file_hash,
+        )
+        try:
+            self._api_client.create_file(request)
+        except SyncApiClientError as exc:
+            self._logger.error(f"Failed to sync created/modified file {absolute_path}: {exc}")
 
     def _handle_deleted(self, file_path: Path) -> None:
         if self._directory_cache is None:
             return
 
-        self._directory_cache.entries.pop(file_path.resolve(), None)
+        absolute_path = file_path.resolve()
+        self._directory_cache.entries.pop(absolute_path, None)
+        request = DeleteFileRequest(file_name=absolute_path.name)
+        try:
+            self._api_client.delete_file(request)
+        except SyncApiClientError as exc:
+            self._logger.error(f"Failed to sync deleted file {absolute_path}: {exc}")
 
     def _handle_moved(self, old_path: Path, new_path: Path | None) -> None:
         if self._directory_cache is None or new_path is None:
             return
 
-        moved_file_hash = self._directory_cache.entries.pop(old_path.resolve(), None)
+        old_absolute_path = old_path.resolve()
+        new_absolute_path = new_path.resolve()
+        moved_file_hash = self._directory_cache.entries.pop(old_absolute_path, None)
         if moved_file_hash is None:
             return
 
-        self._directory_cache.entries[new_path.resolve()] = moved_file_hash
+        self._directory_cache.entries[new_absolute_path] = moved_file_hash
+        request = RenameFileRequest(
+                old_file_name=old_absolute_path.name,
+                new_file_name=new_absolute_path.name,
+            )
+        try:
+            self._api_client.rename_file(request)
+        except SyncApiClientError as exc:
+            self._logger.error(f"Failed to sync moved file from {old_absolute_path} to {new_absolute_path}: {exc}")
 
     def stop(self) -> None:
         if not self._worker_thread:
