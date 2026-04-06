@@ -34,7 +34,3 @@ class RenameFileResponse(MessageResponse):
 class ErrorResponse(BaseModel):
     error: str
     details: list[Any] | None = None
-
-
-class HealthResponse(BaseModel):
-    status: str

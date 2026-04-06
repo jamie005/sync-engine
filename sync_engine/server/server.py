@@ -10,7 +10,6 @@ from sync_engine.common.schemas import (
     DeleteFileRequest,
     ErrorResponse,
     FileActionResponse,
-    HealthResponse,
     RenameFileRequest,
     RenameFileResponse,
 )
@@ -159,9 +158,5 @@ def create_app(base_directory: Path) -> Flask:
             ),
             HTTPStatus.OK,
         )
-
-    @app.get("/health")
-    def health():
-        return _json_response(HealthResponse(status="ok"), HTTPStatus.OK)
 
     return app
