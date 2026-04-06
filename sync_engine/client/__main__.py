@@ -1,19 +1,18 @@
 import argparse
 import logging
+from pathlib import Path
 
 from sync_engine.client import SyncEngineClient
 from sync_engine.common.logging_helpers import get_color_log_handler
 
 
 def main() -> None:
-    # Set up logging
     logger = logging.getLogger(__package__)
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.addHandler(get_color_log_handler())
 
-    # Set up argument parsing
     parser = argparse.ArgumentParser(description="Sync Engine Client")
-    parser.add_argument("source_directory", help="Source directory")
+    parser.add_argument("source_directory", type=Path, help="The directory to monitor for changes and synchronize.")
     args = parser.parse_args()
 
     client = SyncEngineClient(target_directory=args.source_directory)

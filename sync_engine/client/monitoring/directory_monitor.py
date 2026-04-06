@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from queue import Queue
 
 from watchdog.events import (
@@ -42,7 +43,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
             not event.is_directory and
             isinstance(event, cls._VALID_EVENT_TYPES) and
             isinstance(event.src_path, str) and
-            not event.src_path.endswith(cls._IGNORED_FILE_TYPES)
+            Path(event.src_path).suffix not in cls._IGNORED_FILE_TYPES
         )
 
     def on_any_event(self, event: FileSystemEvent) -> None:
@@ -68,9 +69,9 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 class DirectoryMonitor:
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: str, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
+    def __init__(self, target_directory: Path, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
         self._observer = Observer()
-        self._target_directory: str = target_directory
+        self._target_directory: Path = target_directory
         self._event_handler = _SyncEngineClientFileEventHandler(file_events=file_events)
         self._started: bool = False
 
@@ -79,7 +80,7 @@ class DirectoryMonitor:
             self._logger.warning("DirectoryMonitor is already running.")
             return False
         try:
-            self._observer.schedule(self._event_handler, self._target_directory, recursive=False)
+            self._observer.schedule(self._event_handler, str(self._target_directory), recursive=False)
             self._observer.start()
         except Exception as e:
             self._logger.exception(f"Failed to start directory monitor: {e}")

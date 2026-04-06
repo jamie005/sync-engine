@@ -1,5 +1,5 @@
 import logging
-import os
+from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Thread
 
@@ -10,7 +10,7 @@ from sync_engine.common.hashing import sha256_file
 
 
 class DirectoryCache(BaseModel):
-    entries: dict[str, str] = Field(default_factory=dict)
+    entries: dict[Path, str] = Field(default_factory=dict)
 
 
 class DirectorySyncManager:
@@ -19,7 +19,7 @@ class DirectorySyncManager:
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: str, file_system_events: Queue[SyncEngineFileSystemEvent]) -> None:
+    def __init__(self, target_directory: Path, file_system_events: Queue[SyncEngineFileSystemEvent]) -> None:
         self._target_directory = target_directory
         self._file_system_events = file_system_events
         self._stop_event = Event()
@@ -43,19 +43,19 @@ class DirectorySyncManager:
         return True
 
     def _initialise_directory_cache(self) -> bool:
-        if not os.path.isdir(self._target_directory):
+        if not self._target_directory.is_dir():
             return False
 
-        entries: dict[str, str] = {}
+        entries: dict[Path, str] = {}
 
-        for item_name in os.listdir(self._target_directory):
-            abs_path = os.path.join(self._target_directory, item_name)
-            if not os.path.isfile(abs_path):
+        for item_path in self._target_directory.iterdir():
+            if not item_path.is_file():
                 continue
 
-            file_hash = sha256_file(abs_path)
+            absolute_path = item_path.resolve()
+            file_hash = sha256_file(absolute_path)
             if file_hash is not None:
-                entries[abs_path] = file_hash
+                entries[absolute_path] = file_hash
 
         self._directory_cache = DirectoryCache(entries=entries)
         return True
@@ -88,31 +88,32 @@ class DirectorySyncManager:
             case _:
                 self._logger.warning(f"Received unsupported file system event type: {event.type}")
 
-    def _handle_created_or_modified(self, file_path: str) -> None:
+    def _handle_created_or_modified(self, file_path: Path) -> None:
         if self._directory_cache is None:
             return
 
-        file_hash = sha256_file(file_path)
+        absolute_path = file_path.resolve()
+        file_hash = sha256_file(absolute_path)
         if file_hash is not None:
-            self._directory_cache.entries[file_path] = file_hash
-        elif file_path in self._directory_cache.entries:
-            self._directory_cache.entries.pop(file_path, None)
+            self._directory_cache.entries[absolute_path] = file_hash
+        elif absolute_path in self._directory_cache.entries:
+            self._directory_cache.entries.pop(absolute_path, None)
 
-    def _handle_deleted(self, file_path: str) -> None:
+    def _handle_deleted(self, file_path: Path) -> None:
         if self._directory_cache is None:
             return
 
-        self._directory_cache.entries.pop(file_path, None)
+        self._directory_cache.entries.pop(file_path.resolve(), None)
 
-    def _handle_moved(self, old_path: str, new_path: str | None) -> None:
-        if self._directory_cache is None or not isinstance(new_path, str):
+    def _handle_moved(self, old_path: Path, new_path: Path | None) -> None:
+        if self._directory_cache is None or new_path is None:
             return
 
-        moved_file_hash = self._directory_cache.entries.pop(old_path, None)
+        moved_file_hash = self._directory_cache.entries.pop(old_path.resolve(), None)
         if moved_file_hash is None:
             return
 
-        self._directory_cache.entries[new_path] = moved_file_hash
+        self._directory_cache.entries[new_path.resolve()] = moved_file_hash
 
     def stop(self) -> None:
         if not self._worker_thread:

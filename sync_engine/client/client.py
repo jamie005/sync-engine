@@ -1,18 +1,19 @@
 import logging
-import os
+from pathlib import Path
 from threading import Event
 from queue import Queue
 
 from sync_engine.client.monitoring.directory_monitor import DirectoryMonitor
+from sync_engine.client.monitoring.events import SyncEngineFileSystemEvent
 from sync_engine.client.synchronisation.directory_sync_manager import DirectorySyncManager
 
 
 class SyncEngineClient:
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: str) -> None:
-        self._target_directory = os.path.abspath(target_directory)
-        self._file_events: Queue = Queue()
+    def __init__(self, target_directory: Path) -> None:
+        self._target_directory = target_directory.expanduser().resolve()
+        self._file_events: Queue[SyncEngineFileSystemEvent] = Queue()
         self._directory_monitor = DirectoryMonitor(self._target_directory, self._file_events)
         self._directory_sync_manager = DirectorySyncManager(self._target_directory, self._file_events)
         self._stop_event = Event()
@@ -27,7 +28,7 @@ class SyncEngineClient:
 
         self._logger.info(f"Starting Sync Engine Client. Monitoring directory: {self._target_directory}")
 
-        if not os.path.isdir(self._target_directory):
+        if not self._target_directory.is_dir():
             self._logger.error(f"Directory not found or not accessible: {self._target_directory}")
             self._running = False
             return False
