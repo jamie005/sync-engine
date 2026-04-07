@@ -9,6 +9,12 @@ class CreateFileRequest(BaseModel):
     content: str = ""
 
 
+class UpdateFileRequest(BaseModel):
+    file_name: str
+    file_hash: str
+    content: str = ""
+
+
 class DeleteFileRequest(BaseModel):
     file_name: str
 

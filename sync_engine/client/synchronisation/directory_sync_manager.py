@@ -7,8 +7,8 @@ from pydantic import BaseModel, Field
 
 from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
 from sync_engine.client.synchronisation.api_client import HttpSyncApiClient, SyncApiClientError
-from sync_engine.common.hashing import sha256_file
-from sync_engine.common.schemas import CreateFileRequest, DeleteFileRequest, RenameFileRequest
+from sync_engine.common.hashing import sha256_file, sha256_string
+from sync_engine.common.schemas import CreateFileRequest, DeleteFileRequest, RenameFileRequest, UpdateFileRequest
 
 
 class DirectoryCache(BaseModel):
@@ -82,8 +82,10 @@ class DirectorySyncManager:
             return
 
         match event.type:
-            case FileSystemEventType.CREATED | FileSystemEventType.MODIFIED:
-                self._handle_created_or_modified(event.path)
+            case FileSystemEventType.CREATED:
+                self._handle_created(event.path)
+            case FileSystemEventType.MODIFIED:
+                self._handle_modified(event.path)
             case FileSystemEventType.DELETED:
                 self._handle_deleted(event.path)
             case FileSystemEventType.MOVED:
@@ -91,7 +93,7 @@ class DirectorySyncManager:
             case _:
                 self._logger.warning(f"Received unsupported file system event type: {event.type}")
 
-    def _handle_created_or_modified(self, file_path: Path) -> None:
+    def _handle_created(self, file_path: Path) -> None:
         if self._directory_cache is None:
             return
 
@@ -103,16 +105,58 @@ class DirectorySyncManager:
             self._logger.warning(f"Failed to compute hash for file: {absolute_path}. Skipping sync for this file.")
             return
 
+        try:
+            file_content = absolute_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self._logger.warning(f"Failed to read file content for {absolute_path}. Skipping sync for this file: {exc}")
+            return
+
+        request_hash = sha256_string(file_content)
+
         self._directory_cache.entries[absolute_path] = file_hash
         request = CreateFileRequest(
                 file_name=absolute_path.name,
-                file_hash=file_hash,
+                file_hash=request_hash,
+                content=file_content,
         )
         try:
             self._api_client.create_file(request)
-            self._logger.info(f"Synced created/modified file: {absolute_path}")
+            self._logger.info(f"Synced created file: {absolute_path}")
         except SyncApiClientError as exc:
-            self._logger.error(f"Failed to sync created/modified file {absolute_path}: {exc}")
+            self._logger.error(f"Failed to sync created file {absolute_path}: {exc}")
+
+    def _handle_modified(self, file_path: Path) -> None:
+        if self._directory_cache is None:
+            return
+
+        absolute_path = file_path.resolve()
+        file_hash = sha256_file(absolute_path)
+
+        # TODO: figure out what is causing the file hash difference between the client and server
+        if file_hash is None:
+            self._directory_cache.entries.pop(absolute_path, None)
+            self._logger.warning(f"Failed to compute hash for file: {absolute_path}. Skipping sync for this file.")
+            return
+
+        try:
+            file_content = absolute_path.read_text(encoding="utf-8")
+        except OSError as exc:
+            self._logger.warning(f"Failed to read file content for {absolute_path}. Skipping sync for this file: {exc}")
+            return
+
+        request_hash = sha256_string(file_content)
+
+        self._directory_cache.entries[absolute_path] = file_hash
+        request = UpdateFileRequest(
+            file_name=absolute_path.name,
+            file_hash=request_hash,
+            content=file_content,
+        )
+        try:
+            self._api_client.update_file(request)
+            self._logger.info(f"Synced modified file: {absolute_path}")
+        except SyncApiClientError as exc:
+            self._logger.error(f"Failed to sync modified file {absolute_path}: {exc}")
 
     def _handle_deleted(self, file_path: Path) -> None:
         if self._directory_cache is None:

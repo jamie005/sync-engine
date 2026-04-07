@@ -11,6 +11,7 @@ from sync_engine.common.schemas import (
     FileActionResponse,
     RenameFileRequest,
     RenameFileResponse,
+    UpdateFileRequest,
 )
 
 
@@ -29,6 +30,7 @@ class SyncApiClientError(RuntimeError):
 class HttpSyncApiClient():
     _REQUEST_RESPONSE_MAP: dict[type[BaseModel], type[BaseModel]] = {
         CreateFileRequest: FileActionResponse,
+        UpdateFileRequest: FileActionResponse,
         DeleteFileRequest: FileActionResponse,
         RenameFileRequest: RenameFileResponse,
     }
@@ -43,6 +45,9 @@ class HttpSyncApiClient():
 
     def delete_file(self, body: DeleteFileRequest) -> FileActionResponse:
         return cast(FileActionResponse, self._request(HTTPMethod.DELETE, "/files", body))
+
+    def update_file(self, body: UpdateFileRequest) -> FileActionResponse:
+        return cast(FileActionResponse, self._request(HTTPMethod.PUT, "/files", body))
 
     def rename_file(self, body: RenameFileRequest) -> RenameFileResponse:
         return cast(RenameFileResponse, self._request(HTTPMethod.POST, "/files/rename", body))

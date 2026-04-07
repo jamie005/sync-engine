@@ -12,6 +12,7 @@ from sync_engine.common.schemas import (
     FileActionResponse,
     RenameFileRequest,
     RenameFileResponse,
+    UpdateFileRequest,
 )
 
 
@@ -86,6 +87,47 @@ def create_app(base_directory: Path) -> Flask:
         return _json_response(
             FileActionResponse(message="File created", file_name=body.file_name),
             HTTPStatus.CREATED,
+        )
+
+    @app.put("/files")
+    def update_file():
+        payload = request.get_json(silent=True) or {}
+        try:
+            body = UpdateFileRequest.model_validate(payload)
+        except ValidationError as exc:
+            return _validation_error_response(exc)
+
+        computed_hash = sha256_string(body.content)
+        if computed_hash != body.file_hash:
+            return _json_response(
+                ErrorResponse(
+                    error="File content hash mismatch",
+                    details=[
+                        {"field": "file_hash", "expected": body.file_hash, "received": computed_hash}
+                    ],
+                ),
+                HTTPStatus.BAD_REQUEST,
+            )
+
+        try:
+            target = _resolve_safe_path(app.config["BASE_DIRECTORY"], body.file_name)
+        except ValueError as exc:
+            return _json_response(ErrorResponse(error=str(exc)), HTTPStatus.BAD_REQUEST)
+
+        if not target.exists() or not target.is_file():
+            return _json_response(ErrorResponse(error="File not found"), HTTPStatus.NOT_FOUND)
+
+        try:
+            target.write_text(body.content, encoding="utf-8")
+        except OSError as exc:
+            return _json_response(
+                ErrorResponse(error=f"Failed to update file: {str(exc)}"),
+                HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+
+        return _json_response(
+            FileActionResponse(message="File updated", file_name=body.file_name),
+            HTTPStatus.OK,
         )
 
     @app.delete("/files")
