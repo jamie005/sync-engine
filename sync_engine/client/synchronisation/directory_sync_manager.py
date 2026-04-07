@@ -112,6 +112,7 @@ class DirectorySyncManager:
         )
         try:
             self._api_client.create_file(request)
+            self._logger.info(f"Synced created/modified file: {absolute_path}")
         except SyncApiClientError as exc:
             self._logger.error(f"Failed to sync created/modified file {absolute_path}: {exc}")
 
@@ -124,6 +125,7 @@ class DirectorySyncManager:
         request = DeleteFileRequest(file_name=absolute_path.name)
         try:
             self._api_client.delete_file(request)
+            self._logger.info(f"Synced deleted file: {absolute_path}")
         except SyncApiClientError as exc:
             self._logger.error(f"Failed to sync deleted file {absolute_path}: {exc}")
 
@@ -144,6 +146,7 @@ class DirectorySyncManager:
             )
         try:
             self._api_client.rename_file(request)
+            self._logger.info(f"Synced moved file: {old_absolute_path} -> {new_absolute_path}")
         except SyncApiClientError as exc:
             self._logger.error(f"Failed to sync moved file from {old_absolute_path} to {new_absolute_path}: {exc}")
 

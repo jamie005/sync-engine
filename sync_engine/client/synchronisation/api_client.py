@@ -1,4 +1,3 @@
-from abc import ABC, abstractmethod
 from http import HTTPMethod
 from typing import NoReturn, cast
 
@@ -27,29 +26,16 @@ class SyncApiClientError(RuntimeError):
         self.error_response = error_response
 
 
-class AbstractSyncApiClient(ABC):
-    @abstractmethod
-    def create_file(self, body: CreateFileRequest) -> FileActionResponse:
-        raise NotImplementedError
-
-    @abstractmethod
-    def delete_file(self, body: DeleteFileRequest) -> FileActionResponse:
-        raise NotImplementedError
-
-    @abstractmethod
-    def rename_file(self, body: RenameFileRequest) -> RenameFileResponse:
-        raise NotImplementedError
-
-
-class HttpSyncApiClient(AbstractSyncApiClient):
+class HttpSyncApiClient():
     _REQUEST_RESPONSE_MAP: dict[type[BaseModel], type[BaseModel]] = {
         CreateFileRequest: FileActionResponse,
         DeleteFileRequest: FileActionResponse,
         RenameFileRequest: RenameFileResponse,
     }
+    _HTTP_PREFIX = "http://"
 
-    def __init__(self, base_url: str, timeout_seconds: float = 5.0) -> None:
-        self._base_url = base_url.rstrip("/")
+    def __init__(self, server_host: str, server_port: int, timeout_seconds: float = 5.0) -> None:
+        self._base_url = f"{self._HTTP_PREFIX}{server_host}:{server_port}"
         self._timeout_seconds = timeout_seconds
 
     def create_file(self, body: CreateFileRequest) -> FileActionResponse:
