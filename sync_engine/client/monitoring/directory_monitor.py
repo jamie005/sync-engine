@@ -1,6 +1,7 @@
 import logging
 from pathlib import Path
 from queue import Queue
+from time import monotonic
 
 from watchdog.events import (
     FileClosedEvent,
@@ -17,6 +18,7 @@ from sync_engine.client.transformers.watch_dog_event_transformer import WatchDog
 
 
 class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
+    _CREATE_CLOSE_SUPPRESSION_WINDOW_SECONDS: float = 0.25
     _VALID_EVENT_TYPES: tuple[type[FileSystemEvent], ...] = (
         FileCreatedEvent,
         FileClosedEvent,
@@ -30,10 +32,24 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
     def __init__(self, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
         super().__init__()
         self._file_events = file_events
+        self._created_event_timestamps: dict[str, float] = {}
 
     def dispatch(self, event: FileSystemEvent) -> None:
         if not self._valid_event(event):
             return
+
+        if not isinstance(event.src_path, str):
+            return
+
+        now = monotonic()
+        self._prune_stale_pending_created(now)
+
+        if isinstance(event, FileCreatedEvent):
+            self._created_event_timestamps[event.src_path] = now
+        elif isinstance(event, FileClosedEvent):
+            created_at = self._created_event_timestamps.pop(event.src_path, None)
+            if self._is_close_event_for_recent_create(created_at=created_at, now=now):
+                return
 
         return super().dispatch(event)
 
@@ -44,6 +60,22 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
             isinstance(event, cls._VALID_EVENT_TYPES) and
             isinstance(event.src_path, str) and
             Path(event.src_path).suffix not in cls._IGNORED_FILE_TYPES
+        )
+
+    def _prune_stale_pending_created(self, now: float) -> None:
+        stale_paths = [
+            path
+            for path, created_at in self._created_event_timestamps.items()
+            if (now - created_at) > self._CREATE_CLOSE_SUPPRESSION_WINDOW_SECONDS
+        ]
+        for path in stale_paths:
+            self._created_event_timestamps.pop(path, None)
+
+    @classmethod
+    def _is_close_event_for_recent_create(cls, created_at: float | None, now: float) -> bool:
+        return (
+            created_at is not None
+            and (now - created_at) <= cls._CREATE_CLOSE_SUPPRESSION_WINDOW_SECONDS
         )
 
     def on_any_event(self, event: FileSystemEvent) -> None:
