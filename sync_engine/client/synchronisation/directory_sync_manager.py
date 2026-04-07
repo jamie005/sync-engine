@@ -16,7 +16,6 @@ class DirectoryCache(BaseModel):
 
 
 class DirectorySyncManager:
-    _EVENT_CONSUMER_THREAD_NAME: str = "directory-sync-manager"
     _EVENT_CONSUME_INTERVAL_SECONDS: float = 0.5
 
     _logger = logging.getLogger(__name__)
@@ -42,8 +41,7 @@ class DirectorySyncManager:
             return False
 
         self._stop_event.clear()
-        self._worker_thread = Thread(target=self._consume_events, daemon=True,
-                                     name=self._EVENT_CONSUMER_THREAD_NAME)
+        self._worker_thread = Thread(target=self._consume_events, daemon=True)
         self._worker_thread.start()
         return True
 
