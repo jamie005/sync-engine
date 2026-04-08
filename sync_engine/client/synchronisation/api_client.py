@@ -27,7 +27,7 @@ class SyncApiClientError(RuntimeError):
         self.error_response = error_response
 
 
-class HttpSyncApiClient():
+class HttpSyncApiClient:
     _REQUEST_RESPONSE_MAP: dict[type[BaseModel], type[BaseModel]] = {
         CreateFileRequest: FileActionResponse,
         UpdateFileRequest: FileActionResponse,

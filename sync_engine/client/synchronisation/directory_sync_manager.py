@@ -2,17 +2,32 @@ import logging
 from pathlib import Path
 from queue import Empty, Queue
 from threading import Event, Thread
+from typing import Callable, Protocol
 
 from pydantic import BaseModel, Field
 
 from sync_engine.client.monitoring.events import FileSystemEventType, SyncEngineFileSystemEvent
-from sync_engine.client.synchronisation.api_client import HttpSyncApiClient, SyncApiClientError
+from sync_engine.client.synchronisation.api_client import SyncApiClientError
 from sync_engine.common.hashing import sha256_string
 from sync_engine.common.schemas import CreateFileRequest, DeleteFileRequest, RenameFileRequest, UpdateFileRequest
 
 
 class _DirectoryCache(BaseModel):
     entries: dict[Path, str] = Field(default_factory=dict)
+
+
+class _SyncApiClient(Protocol):
+    def create_file(self, body: CreateFileRequest) -> object:
+        ...
+
+    def update_file(self, body: UpdateFileRequest) -> object:
+        ...
+
+    def delete_file(self, body: DeleteFileRequest) -> object:
+        ...
+
+    def rename_file(self, body: RenameFileRequest) -> object:
+        ...
 
 
 class DirectorySyncManager:
@@ -22,10 +37,14 @@ class DirectorySyncManager:
 
     def __init__(self, target_directory: Path,
                  file_system_events: Queue[SyncEngineFileSystemEvent],
-                 api_client: HttpSyncApiClient) -> None:
+                 api_client: _SyncApiClient,
+                 hash_string: Callable[[str], str] = sha256_string,
+                 read_text: Callable[[Path], str] | None = None) -> None:
         self._target_directory = target_directory
         self._file_system_events = file_system_events
         self._api_client = api_client
+        self._hash_string = hash_string
+        self._read_text = read_text or self._default_read_text
         self._stop_event = Event()
         self._worker_thread: Thread | None = None
         self._directory_cache: _DirectoryCache | None = None
@@ -55,18 +74,23 @@ class DirectorySyncManager:
                 continue
 
             absolute_path = item_path.resolve()
-            file_content = self._read_file_content(absolute_path)
-            if file_content is None:
+            content_and_hash = self._read_file_content_and_hash(absolute_path)
+            if content_and_hash is None:
                 continue
 
-            entries[absolute_path] = sha256_string(file_content)
+            _, file_hash = content_and_hash
+            entries[absolute_path] = file_hash
 
         self._directory_cache = _DirectoryCache(entries=entries)
         return True
 
+    @staticmethod
+    def _default_read_text(file_path: Path) -> str:
+        return file_path.read_text(encoding="utf-8")
+
     def _read_file_content(self, file_path: Path) -> str | None:
         try:
-            return file_path.read_text(encoding="utf-8")
+            return self._read_text(file_path)
         except OSError as exc:
             self._logger.warning(f"Failed to read file content for {file_path}. Skipping sync for this file: {exc}")
         except UnicodeDecodeError as exc:
@@ -74,6 +98,13 @@ class DirectorySyncManager:
                 f"Failed to decode file content for {file_path} as UTF-8. Skipping sync for this file: {exc}"
             )
         return None
+
+    def _read_file_content_and_hash(self, file_path: Path) -> tuple[str, str] | None:
+        file_content = self._read_file_content(file_path)
+        if file_content is None:
+            return None
+
+        return file_content, self._hash_string(file_content)
 
     def _consume_events(self) -> None:
         while not self._stop_event.is_set():
@@ -110,11 +141,12 @@ class DirectorySyncManager:
             return
 
         absolute_path = file_path.resolve()
-        file_content = self._read_file_content(absolute_path)
-        if file_content is None:
+        content_and_hash = self._read_file_content_and_hash(absolute_path)
+        if content_and_hash is None:
             return
 
-        request_hash = sha256_string(file_content)
+        file_content, request_hash = content_and_hash
+
         request = CreateFileRequest(
                 file_name=absolute_path.name,
                 file_hash=request_hash,
@@ -134,11 +166,12 @@ class DirectorySyncManager:
             return
 
         absolute_path = file_path.resolve()
-        file_content = self._read_file_content(absolute_path)
-        if file_content is None:
+        content_and_hash = self._read_file_content_and_hash(absolute_path)
+        if content_and_hash is None:
             return
 
-        request_hash = sha256_string(file_content)
+        file_content, request_hash = content_and_hash
+
         request = UpdateFileRequest(
             file_name=absolute_path.name,
             file_hash=request_hash,
