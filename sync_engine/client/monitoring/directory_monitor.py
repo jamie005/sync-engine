@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 from queue import Queue
 from time import monotonic
+from typing import Callable, Protocol
 
 from watchdog.events import (
     FileClosedEvent,
@@ -29,9 +30,16 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
+    def __init__(
+        self,
+        file_events: Queue[SyncEngineFileSystemEvent],
+        clock: Callable[[], float] = monotonic,
+        event_transformer: Callable[[FileSystemEvent], SyncEngineFileSystemEvent] = WatchDogEventTransformer.transform,
+    ) -> None:
         super().__init__()
         self._file_events = file_events
+        self._clock = clock
+        self._event_transformer = event_transformer
         self._created_event_timestamps: dict[str, float] = {}
 
     def dispatch(self, event: FileSystemEvent) -> None:
@@ -41,7 +49,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         if not isinstance(event.src_path, str):
             return
 
-        now = monotonic()
+        now = self._clock()
         self._prune_stale_pending_created(now)
 
         if isinstance(event, FileCreatedEvent):
@@ -79,7 +87,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         )
 
     def on_any_event(self, event: FileSystemEvent) -> None:
-        sync_engine_file_sys_event = WatchDogEventTransformer.transform(event)
+        sync_engine_file_sys_event = self._event_transformer(event)
 
         if sync_engine_file_sys_event.type == FileSystemEventType.UNKNOWN:
             self._logger.warning(f"Unknown file event detected: {event}")
@@ -98,13 +106,29 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         return msg
 
 
+class _ObserverLike(Protocol):
+    def schedule(self, event_handler: FileSystemEventHandler, path: str, recursive: bool = False) -> None: ...
+
+    def start(self) -> None: ...
+
+    def stop(self) -> None: ...
+
+    def join(self) -> None: ...
+
+
 class DirectoryMonitor:
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: Path, file_events: Queue[SyncEngineFileSystemEvent]) -> None:
-        self._observer = Observer()
+    def __init__(
+        self,
+        target_directory: Path,
+        file_events: Queue[SyncEngineFileSystemEvent],
+        observer: _ObserverLike | None = None,
+        event_handler: FileSystemEventHandler | None = None,
+    ) -> None:
+        self._observer = observer or Observer()
         self._target_directory: Path = target_directory
-        self._event_handler = _SyncEngineClientFileEventHandler(file_events=file_events)
+        self._event_handler = event_handler or _SyncEngineClientFileEventHandler(file_events=file_events)
         self._started: bool = False
 
     def start(self) -> bool:
