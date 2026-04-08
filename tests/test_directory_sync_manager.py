@@ -242,6 +242,7 @@ class TestDirectorySyncManagerStop:
 
         # Give thread time to stop
         time.sleep(0.1)
+        assert initial_thread is not None
         assert not initial_thread.is_alive()
 
     def test_stop_when_not_running(self, temp_dir, sync_event_queue, mock_api_client):
