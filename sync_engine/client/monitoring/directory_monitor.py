@@ -26,7 +26,6 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         FileDeletedEvent,
         FileMovedEvent
     )
-    _IGNORED_FILE_TYPES: tuple[str, ...] = (".swp",)
 
     _logger = logging.getLogger(__name__)
 
@@ -66,8 +65,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         return (
             not event.is_directory and
             isinstance(event, cls._VALID_EVENT_TYPES) and
-            isinstance(event.src_path, str) and
-            Path(event.src_path).suffix not in cls._IGNORED_FILE_TYPES
+            isinstance(event.src_path, str)
         )
 
     def _prune_stale_pending_created(self, now: float) -> None:
