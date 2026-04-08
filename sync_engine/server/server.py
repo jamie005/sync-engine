@@ -17,10 +17,12 @@ from sync_engine.common.schemas import (
 
 
 def _json_response(model: BaseModel, status_code: int):
+    """Serialize a pydantic model into a Flask JSON response."""
     return jsonify(model.model_dump()), status_code
 
 
 def _validation_error_response(exc: ValidationError):
+    """Return a standardized 400 response for validation errors."""
     return _json_response(
         ErrorResponse(error="Invalid request payload", details=exc.errors()),
         HTTPStatus.BAD_REQUEST,
@@ -28,6 +30,7 @@ def _validation_error_response(exc: ValidationError):
 
 
 def _resolve_safe_path(base_directory: Path, relative_path: str) -> Path:
+    """Resolve a relative path and ensure it stays within base_directory."""
     if not relative_path:
         raise ValueError("'file path' must be a non-empty string")
 
@@ -42,7 +45,25 @@ def _resolve_safe_path(base_directory: Path, relative_path: str) -> Path:
     return candidate
 
 
+def _file_hash_mismatch_response(expected_hash: str, content: str):
+    """Return a 400 response when file content does not match the supplied hash."""
+    computed_hash = sha256_string(content)
+    if computed_hash == expected_hash:
+        return None
+
+    return _json_response(
+        ErrorResponse(
+            error="File content hash mismatch",
+            details=[
+                {"field": "file_hash", "expected": expected_hash, "received": computed_hash}
+            ],
+        ),
+        HTTPStatus.BAD_REQUEST,
+    )
+
+
 def create_app(base_directory: Path) -> Flask:
+    """Create and configure the Flask app for file synchronization routes."""
     app = Flask(__name__)
     app.config["BASE_DIRECTORY"] = base_directory.resolve()
 
@@ -54,18 +75,9 @@ def create_app(base_directory: Path) -> Flask:
         except ValidationError as exc:
             return _validation_error_response(exc)
 
-        # Verify file content integrity via hash
-        computed_hash = sha256_string(body.content)
-        if computed_hash != body.file_hash:
-            return _json_response(
-                ErrorResponse(
-                    error="File content hash mismatch",
-                    details=[
-                        {"field": "file_hash", "expected": body.file_hash, "received": computed_hash}
-                    ],
-                ),
-                HTTPStatus.BAD_REQUEST,
-            )
+        hash_mismatch_response = _file_hash_mismatch_response(body.file_hash, body.content)
+        if hash_mismatch_response is not None:
+            return hash_mismatch_response
 
         try:
             target = _resolve_safe_path(app.config["BASE_DIRECTORY"], body.file_name)
@@ -97,17 +109,9 @@ def create_app(base_directory: Path) -> Flask:
         except ValidationError as exc:
             return _validation_error_response(exc)
 
-        computed_hash = sha256_string(body.content)
-        if computed_hash != body.file_hash:
-            return _json_response(
-                ErrorResponse(
-                    error="File content hash mismatch",
-                    details=[
-                        {"field": "file_hash", "expected": body.file_hash, "received": computed_hash}
-                    ],
-                ),
-                HTTPStatus.BAD_REQUEST,
-            )
+        hash_mismatch_response = _file_hash_mismatch_response(body.file_hash, body.content)
+        if hash_mismatch_response is not None:
+            return hash_mismatch_response
 
         try:
             target = _resolve_safe_path(app.config["BASE_DIRECTORY"], body.file_name)

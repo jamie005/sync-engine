@@ -16,6 +16,8 @@ from sync_engine.common.schemas import (
 
 
 class SyncApiClientError(RuntimeError):
+    """Raised when the sync API request or response handling fails."""
+
     def __init__(
         self,
         message: str,
@@ -28,6 +30,8 @@ class SyncApiClientError(RuntimeError):
 
 
 class HttpSyncApiClient:
+    """HTTP client for file sync operations against the server."""
+
     _REQUEST_RESPONSE_MAP: dict[type[BaseModel], type[BaseModel]] = {
         CreateFileRequest: FileActionResponse,
         UpdateFileRequest: FileActionResponse,
@@ -48,18 +52,23 @@ class HttpSyncApiClient:
         self._request_sender = request_sender or requests.request
 
     def create_file(self, body: CreateFileRequest) -> FileActionResponse:
+        """Create a file on the server."""
         return cast(FileActionResponse, self._request(HTTPMethod.POST, "/files", body))
 
     def delete_file(self, body: DeleteFileRequest) -> FileActionResponse:
+        """Delete a file on the server."""
         return cast(FileActionResponse, self._request(HTTPMethod.DELETE, "/files", body))
 
     def update_file(self, body: UpdateFileRequest) -> FileActionResponse:
+        """Update an existing file on the server."""
         return cast(FileActionResponse, self._request(HTTPMethod.PUT, "/files", body))
 
     def rename_file(self, body: RenameFileRequest) -> RenameFileResponse:
+        """Rename a file on the server."""
         return cast(RenameFileResponse, self._request(HTTPMethod.POST, "/files/rename", body))
 
     def _request(self, method: HTTPMethod, path: str, request_model: BaseModel | None) -> BaseModel:
+        """Send an HTTP request and validate the response payload."""
         payload, response_type = self._validate_and_prepare_request(request_model)
 
         try:
@@ -87,6 +96,7 @@ class HttpSyncApiClient:
 
     @classmethod
     def _validate_and_prepare_request(cls, request_model: BaseModel | None) -> tuple[dict | None, type[BaseModel]]:
+        """Map request models to payload and expected response model."""
         payload: dict | None = None
         response_type: type[BaseModel] | None = None
 
@@ -104,6 +114,7 @@ class HttpSyncApiClient:
 
     @staticmethod
     def _raise_http_error(response: requests.Response, source_error: Exception | None = None) -> NoReturn:
+        """Raise a structured SyncApiClientError from an HTTP error response."""
         try:
             parsed_error = ErrorResponse.model_validate(response.json())
             error_message = parsed_error.error

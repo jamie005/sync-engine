@@ -31,6 +31,8 @@ class _SyncApiClient(Protocol):
 
 
 class DirectorySyncManager:
+    """Consumes filesystem events and mirrors file changes to the server."""
+
     _EVENT_CONSUME_INTERVAL_SECONDS: float = 0.5
 
     _logger = logging.getLogger(__name__)
@@ -50,6 +52,7 @@ class DirectorySyncManager:
         self._directory_cache: _DirectoryCache | None = None
 
     def start(self) -> bool:
+        """Start background event consumption and initialize cache."""
         if self._worker_thread and self._worker_thread.is_alive():
             self._logger.warning("DirectorySyncManager is already running.")
             return False
@@ -65,6 +68,7 @@ class DirectorySyncManager:
         return True
 
     def _initialise_directory_cache(self) -> bool:
+        """Build an initial hash cache for files in the target directory."""
         if not self._target_directory.is_dir():
             return False
 
@@ -107,6 +111,7 @@ class DirectorySyncManager:
         return file_content, self._hash_string(file_content)
 
     def _consume_events(self) -> None:
+        """Continuously consume and process filesystem events."""
         while not self._stop_event.is_set():
             try:
                 event = self._file_system_events.get(timeout=self._EVENT_CONSUME_INTERVAL_SECONDS)
@@ -121,6 +126,7 @@ class DirectorySyncManager:
             self._apply_event(event)
 
     def _apply_event(self, event: SyncEngineFileSystemEvent) -> None:
+        """Route an event to its specific handler."""
         if event.is_directory or self._directory_cache is None:
             return
 
@@ -225,6 +231,7 @@ class DirectorySyncManager:
         self._directory_cache.entries[new_absolute_path] = moved_file_hash
 
     def stop(self) -> None:
+        """Stop the background worker thread."""
         if not self._worker_thread:
             return
 

@@ -19,6 +19,8 @@ class _StartStopComponent(Protocol):
 
 
 class SyncEngineClient:
+    """Coordinates local monitoring and remote file synchronization."""
+
     _logger = logging.getLogger(__name__)
 
     def __init__(
@@ -47,9 +49,11 @@ class SyncEngineClient:
 
     @property
     def is_running(self) -> bool:
+        """Return whether the client is currently running."""
         return self._running
 
     def start(self) -> bool:
+        """Start synchronization components if the target directory is valid."""
         if self._running:
             self._logger.warning("Sync Engine Client is already running.")
             return False
@@ -79,6 +83,7 @@ class SyncEngineClient:
         return True
 
     def wait_for_stop(self, timeout: float | None = None) -> bool:
+        """Wait for a stop signal or until timeout expires."""
         try:
             return self._stop_event.wait(timeout=timeout)
         except KeyboardInterrupt:
@@ -86,6 +91,7 @@ class SyncEngineClient:
             return True
 
     def stop(self) -> None:
+        """Stop synchronization components and signal shutdown."""
         if not self._running:
             return
 

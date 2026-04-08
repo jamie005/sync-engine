@@ -19,6 +19,8 @@ from sync_engine.client.transformers.watch_dog_event_transformer import WatchDog
 
 
 class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
+    """Filters watchdog events and forwards supported events to a queue."""
+
     _CREATE_CLOSE_SUPPRESSION_WINDOW_SECONDS: float = 0.25
     _VALID_EVENT_TYPES: tuple[type[FileSystemEvent], ...] = (
         FileCreatedEvent,
@@ -42,6 +44,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         self._created_event_timestamps: dict[str, float] = {}
 
     def dispatch(self, event: FileSystemEvent) -> None:
+        """Suppress duplicate create/close events before dispatching."""
         if not self._valid_event(event):
             return
 
@@ -85,6 +88,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
         )
 
     def on_any_event(self, event: FileSystemEvent) -> None:
+        """Transform and enqueue supported filesystem events."""
         sync_engine_file_sys_event = self._event_transformer(event)
 
         if sync_engine_file_sys_event.type == FileSystemEventType.UNKNOWN:
@@ -115,6 +119,8 @@ class _ObserverLike(Protocol):
 
 
 class DirectoryMonitor:
+    """Starts and stops a watchdog observer for a target directory."""
+
     _logger = logging.getLogger(__name__)
 
     def __init__(
@@ -130,6 +136,7 @@ class DirectoryMonitor:
         self._started: bool = False
 
     def start(self) -> bool:
+        """Start the observer if it is not already running."""
         if self._started:
             self._logger.warning("DirectoryMonitor is already running.")
             return False
@@ -144,6 +151,7 @@ class DirectoryMonitor:
         return True
 
     def stop(self) -> None:
+        """Stop the observer and wait for it to terminate."""
         if not self._started:
             return
         try:
