@@ -1,5 +1,5 @@
 from http import HTTPMethod
-from typing import NoReturn, cast
+from typing import Callable, NoReturn, cast
 
 import requests
 from pydantic import BaseModel, ValidationError
@@ -36,9 +36,16 @@ class HttpSyncApiClient:
     }
     _HTTP_PREFIX = "http://"
 
-    def __init__(self, server_host: str, server_port: int, timeout_seconds: float = 5.0) -> None:
+    def __init__(
+        self,
+        server_host: str,
+        server_port: int,
+        timeout_seconds: float = 5.0,
+        request_sender: Callable[..., requests.Response] | None = None,
+    ) -> None:
         self._base_url = f"{self._HTTP_PREFIX}{server_host}:{server_port}"
         self._timeout_seconds = timeout_seconds
+        self._request_sender = request_sender or requests.request
 
     def create_file(self, body: CreateFileRequest) -> FileActionResponse:
         return cast(FileActionResponse, self._request(HTTPMethod.POST, "/files", body))
@@ -56,7 +63,7 @@ class HttpSyncApiClient:
         payload, response_type = self._validate_and_prepare_request(request_model)
 
         try:
-            response = requests.request(
+            response = self._request_sender(
                 method=method.value,
                 url=f"{self._base_url}{path}",
                 json=payload,
@@ -64,7 +71,9 @@ class HttpSyncApiClient:
             )
             response.raise_for_status()
         except requests.exceptions.HTTPError as exc:
-            self._raise_http_error(exc)
+            if exc.response is None:
+                raise SyncApiClientError("Server request failed without a response") from exc
+            self._raise_http_error(exc.response, source_error=exc)
         except requests.exceptions.RequestException as exc:
             raise SyncApiClientError(f"Failed to call sync server: {exc}") from exc
 
@@ -94,17 +103,17 @@ class HttpSyncApiClient:
         return payload, response_type
 
     @staticmethod
-    def _raise_http_error(exc: requests.exceptions.HTTPError) -> NoReturn:
+    def _raise_http_error(response: requests.Response, source_error: Exception | None = None) -> NoReturn:
         try:
-            parsed_error = ErrorResponse.model_validate(exc.response.json())
+            parsed_error = ErrorResponse.model_validate(response.json())
             error_message = parsed_error.error
             raise SyncApiClientError(
                 error_message,
-                status_code=exc.response.status_code,
+                status_code=response.status_code,
                 error_response=parsed_error,
-            ) from exc
+            ) from source_error
         except (requests.exceptions.JSONDecodeError, ValidationError):
             raise SyncApiClientError(
-                f"Server request failed with status {exc.response.status_code}: {exc.response.text}",
-                status_code=exc.response.status_code,
-            ) from exc
+                f"Server request failed with status {response.status_code}: {response.text}",
+                status_code=response.status_code,
+            ) from source_error
