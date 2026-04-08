@@ -76,7 +76,7 @@ class TestSyncEngineClientInit:
     def test_init_with_custom_server_host_and_port(self, temp_dir):
         """Test initialization with custom server host and port."""
         with patch('sync_engine.client.client.HttpSyncApiClient') as mock_api_factory:
-            client = SyncEngineClient(temp_dir, server_host="192.168.1.1", server_port=8080)
+            SyncEngineClient(temp_dir, server_host="192.168.1.1", server_port=8080)
 
             mock_api_factory.assert_called_once_with("192.168.1.1", 8080)
 
