@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 
 class FileSystemEventType(Enum):
@@ -13,6 +14,6 @@ class FileSystemEventType(Enum):
 @dataclass(frozen=True)
 class SyncEngineFileSystemEvent:
     type: FileSystemEventType
-    path: str
-    new_path: str | None = None
+    path: Path
+    new_path: Path | None = None
     is_directory: bool = False

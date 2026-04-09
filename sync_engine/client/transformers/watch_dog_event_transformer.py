@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from watchdog.events import FileClosedEvent, FileSystemEvent, FileCreatedEvent, FileDeletedEvent, FileMovedEvent
 
 from sync_engine.client.monitoring.events import SyncEngineFileSystemEvent, FileSystemEventType
@@ -28,8 +30,14 @@ class WatchDogEventTransformer:
         else:
             event_type = FileSystemEventType.UNKNOWN
 
-        src_path = str(watchdog_event.src_path)
-        dest_path = str(watchdog_event.dest_path)
+        src_path_name = str(watchdog_event.src_path)
+        src_path = Path(src_path_name)
+
+        dest_path_name = str(watchdog_event.dest_path)
+        if dest_path_name:
+            dest_path = Path(dest_path_name)
+        else:
+            dest_path = None
 
         return SyncEngineFileSystemEvent(
             type=event_type,

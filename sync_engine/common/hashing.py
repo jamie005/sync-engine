@@ -1,5 +1,6 @@
 import hashlib
 import logging
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ def sha256_string(data: str, encoding: str = "utf-8") -> str:
     return digest.hexdigest()
 
 
-def sha256_file(file_path: str) -> str | None:
+def sha256_file(file_path: Path) -> str | None:
     """
     Compute SHA256 hash of a file on disk.
 
