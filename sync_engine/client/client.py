@@ -24,7 +24,7 @@ class SyncEngineClient:
     _logger = logging.getLogger(__name__)
 
     def __init__(
-        self, 
+        self,
         target_directory: Path,
         server_host: str = "127.0.0.1",
         server_port: int = 5000,
