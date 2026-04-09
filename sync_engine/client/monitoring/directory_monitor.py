@@ -18,6 +18,11 @@ from .events import FileSystemEventType, SyncEngineFileSystemEvent
 from sync_engine.client.transformers.watch_dog_event_transformer import WatchDogEventTransformer
 
 
+# COMPROMISE: I selected watchdog over watchfiles as it has the ability to listen for file moves. However,
+# watchdog has some quirks around duplicate create/close events which I have attempted to mitigate with a
+# suppression window.
+
+
 class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
     """Filters watchdog events and forwards supported events to a queue."""
 
@@ -65,6 +70,7 @@ class _SyncEngineClientFileEventHandler(FileSystemEventHandler):
 
     @classmethod
     def _valid_event(cls, event: FileSystemEvent) -> bool:
+        # ASSUMPTION: the client only needs to synchronise regular files, not directories.
         return (
             not event.is_directory and
             isinstance(event, cls._VALID_EVENT_TYPES) and
@@ -141,6 +147,7 @@ class DirectoryMonitor:
             self._logger.warning("DirectoryMonitor is already running.")
             return False
         try:
+            # ASSUMPTION: the client does not need to synchronise the contents of subdirectories.
             self._observer.schedule(self._event_handler, str(self._target_directory), recursive=False)
             self._observer.start()
         except Exception as e:

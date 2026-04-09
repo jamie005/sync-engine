@@ -24,7 +24,7 @@ class SyncEngineClient:
     _logger = logging.getLogger(__name__)
 
     def __init__(
-        self,
+        self, 
         target_directory: Path,
         server_host: str = "127.0.0.1",
         server_port: int = 5000,
@@ -34,6 +34,7 @@ class SyncEngineClient:
         stop_event: Event | None = None,
         api_client: HttpSyncApiClient | None = None,
     ) -> None:
+
         self._target_directory = target_directory.expanduser().resolve()
         self._file_events = file_events or Queue()
 

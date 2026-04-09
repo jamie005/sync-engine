@@ -121,6 +121,8 @@ def create_app(base_directory: Path) -> Flask:
         if not target.exists() or not target.is_file():
             return _json_response(ErrorResponse(error="File not found"), HTTPStatus.NOT_FOUND)
 
+        # COMPROMISE: I used Path.write_text for simplicity and convenience. It does not support atomic
+        # writes, so in a production system I would consider using a more robust approach to avoid data loss.
         try:
             target.write_text(body.content, encoding="utf-8")
         except OSError as exc:

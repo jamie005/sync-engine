@@ -2,6 +2,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+# COMPROMISE: I used Pydantic models for request/response schemas as it provides convenient validation and
+# serialisation. In an ideal world, I would have preferred to use Protobuf as it supports byte content and
+# faster encoding/decoding.
+
 
 class CreateFileRequest(BaseModel):
     file_name: str

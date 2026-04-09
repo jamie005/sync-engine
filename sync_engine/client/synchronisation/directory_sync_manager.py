@@ -37,7 +37,8 @@ class DirectorySyncManager:
 
     _logger = logging.getLogger(__name__)
 
-    def __init__(self, target_directory: Path,
+    def __init__(self,
+                 target_directory: Path,
                  file_system_events: Queue[SyncEngineFileSystemEvent],
                  api_client: _SyncApiClient,
                  hash_string: Callable[[str], str] = sha256_string,
@@ -152,7 +153,7 @@ class DirectorySyncManager:
             return
 
         file_content, request_hash = content_and_hash
-
+        # ASSUMPTION: only the file's name and content need to be synchronised, metadata can be ignored.
         request = CreateFileRequest(
                 file_name=absolute_path.name,
                 file_hash=request_hash,
@@ -228,6 +229,7 @@ class DirectorySyncManager:
             return
 
         self._logger.info(f"Synced moved file: {old_absolute_path} -> {new_absolute_path}")
+        # ASSUMPTION: the file content remains unchanged during a move, so the existing hash can be reused in the cache.
         self._directory_cache.entries[new_absolute_path] = moved_file_hash
 
     def stop(self) -> None:
